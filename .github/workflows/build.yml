@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v5.2.1
+      image: espressif/idf:latest
 
     steps:
       - name: Checkout repository
@@ -21,6 +21,7 @@ jobs:
       - name: Build esp-miner firmware
         shell: bash
         run: |
+          git config --global --add safe.directory /__w/esp-miner/esp-miner
           . /opt/esp/idf/export.sh
           idf.py build
 
