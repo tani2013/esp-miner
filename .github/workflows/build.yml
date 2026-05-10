@@ -1,3 +1,4 @@
+cat << 'EOF' > .github/workflows/build.yml
 name: ESP-IDF Build
 
 on:
@@ -10,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v5.2.1
+      image: espressif/idf:v5.5.0
 
     steps:
       - name: Checkout repository
@@ -21,7 +22,6 @@ jobs:
       - name: Build esp-miner firmware
         shell: bash
         run: |
-          git config --global --add safe.directory /__w/esp-miner/esp-miner
           . /opt/esp/idf/export.sh
           idf.py build
 
@@ -34,3 +34,8 @@ jobs:
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
           retention-days: 30
+EOF
+
+git add .github/workflows/build.yml
+git commit -m "fix: Upgrade ESP-IDF Docker image to v5.5.0"
+git push
