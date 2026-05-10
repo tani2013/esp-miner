@@ -1,50 +1,35 @@
-name: Build Firmware
-on: [push, pull_request]
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+name: ESP-IDF Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v5.2.1
+
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v6
-      with:
-        submodules: 'recursive'
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '24.14.0'
-    - name: Build web dist
-      working-directory: ./main/http_server/axe-os
-      run: |
-        npm ci
-        npm run build
-    - name: esp-idf build
-      uses: espressif/esp-idf-ci-action@v1
-      with:
-        esp_idf_version: v5.5.3
-        target: esp32s3
-        command: GITHUB_ACTIONS="true" idf.py build
-        path: '.'
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - run: pip install esptool
-    - name: "Create factory/merged image"
-      run: "./merge_bin.sh ./esp-miner-merged.bin"
-    - name: upload esp-miner-merged.bin
-      uses: actions/upload-artifact@v4
-      with:
-        name: esp-miner-factory.bin
-        path: ./esp-miner-merged.bin
-    - name: upload esp-miner.bin
-      uses: actions/upload-artifact@v4
-      with:
-        name: esp-miner.bin
-        path: ./build/esp-miner.bin
-    - name: upload www.bin
-      uses: actions/upload-artifact@v4
-      with:
-        name: www.bin
-        path: ./build/www.bin
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build esp-miner firmware
+        shell: bash
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py build
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp-miner-firmware
+          path: |
+            build/esp-miner.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+          retention-days: 30
