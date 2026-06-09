@@ -944,8 +944,10 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddFloatToObject(root, "frequency", frequency);
     cJSON_AddFloatToObject(root, "actualFrequency", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.actual_frequency);
     cJSON_AddFloatToObject(root, "asgTargetFrequency", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.asg_target_frequency);
+    cJSON_AddFloatToObject(root, "asgTargetVoltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.asg_target_voltage);
     cJSON_AddNumberToObject(root, "asgEnabled", nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED));
     cJSON_AddNumberToObject(root, "asgErrorTarget", nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET));
+    cJSON_AddNumberToObject(root, "asgVoltageControl", nvs_config_get_bool(NVS_CONFIG_ASG_VOLTAGE_CONTROL));
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
     cJSON_AddStringToObject(root, "hostname", hostname);

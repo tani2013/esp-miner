@@ -1,137 +1,192 @@
 #include "unity.h"
 #include "asg.h"
 
-// Helper: drive the governor for one decision, advancing the clock past the
-// decision interval so asg_step actually evaluates instead of self-throttling.
-static float drive(AsgState * asg, float err, float temp, int64_t * clock_ms)
+// Helper: advance the clock past the decision interval so asg_step evaluates
+// instead of self-throttling, and return its output.
+static AsgOutput drive(AsgState * asg, float err, float temp, float hr, int64_t * clock_ms)
 {
     *clock_ms += ASG_DECISION_INTERVAL_MS;
-    return asg_step(asg, err, temp, *clock_ms);
+    return asg_step(asg, err, temp, hr, *clock_ms);
 }
 
-TEST_CASE("asg starts at the ceiling", "[asg]")
+TEST_CASE("asg starts at the frequency and voltage ceilings", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 525.0f, 2.0f);
+    asg_init(&asg, 525.0f, 1200.0f, 2.0f);
     TEST_ASSERT_EQUAL_FLOAT(525.0f, asg.target_freq);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, asg.target_voltage);
     TEST_ASSERT_EQUAL_FLOAT(525.0f * ASG_FLOOR_FRACTION, asg.floor_freq);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f * ASG_VOLTAGE_FLOOR_FRACTION, asg.floor_voltage);
 }
 
-TEST_CASE("asg never exceeds the ceiling even when perfectly healthy", "[asg]")
+TEST_CASE("asg never exceeds the ceilings and undervolts to the floor when healthy", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    for (int i = 0; i < 200; i++) {
-        float f = drive(&asg, 0.0f, 55.0f, &clock);
-        TEST_ASSERT_TRUE(f <= 500.0f);
+    for (int i = 0; i < 300; i++) {
+        AsgOutput o = drive(&asg, 0.0f, 55.0f, 1.0f, &clock);
+        TEST_ASSERT_TRUE(o.frequency_mhz <= 500.0f);
+        TEST_ASSERT_TRUE(o.voltage_mv <= 1200.0f);
+        TEST_ASSERT_TRUE(o.voltage_mv >= asg.floor_voltage - 0.001f);
     }
+    // Frequency held at ceiling; voltage driven down to the efficiency floor.
     TEST_ASSERT_EQUAL_FLOAT(500.0f, asg.target_freq);
+    TEST_ASSERT_EQUAL_FLOAT(1080.0f, asg.target_voltage);
 }
 
-TEST_CASE("asg backs off gently on mild instability", "[asg]")
+TEST_CASE("asg backs off frequency on mild instability when at the voltage ceiling", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    float f = drive(&asg, 3.0f /* > target, < critical */, 55.0f, &clock);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, f);
+    AsgOutput o = drive(&asg, 3.0f, 55.0f, 1.0f, &clock);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, o.frequency_mhz);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, o.voltage_mv);
 }
 
-TEST_CASE("asg backs off hard on strong instability", "[asg]")
+TEST_CASE("asg backs off frequency hard on strong instability", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    // target 2% -> critical = 5%; feed 6% to trigger the hard path.
-    float f = drive(&asg, 6.0f, 55.0f, &clock);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_HARD_MHZ, f);
+    AsgOutput o = drive(&asg, 6.0f, 55.0f, 1.0f, &clock); // critical = 5%
+    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_HARD_MHZ, o.frequency_mhz);
 }
 
-TEST_CASE("asg never drops below the floor", "[asg]")
+TEST_CASE("asg never drops frequency below the floor", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    for (int i = 0; i < 200; i++) {
-        float f = drive(&asg, 50.0f /* relentless errors */, 55.0f, &clock);
-        TEST_ASSERT_TRUE(f >= asg.floor_freq - 0.001f);
+    for (int i = 0; i < 300; i++) {
+        AsgOutput o = drive(&asg, 50.0f, 55.0f, 1.0f, &clock);
+        TEST_ASSERT_TRUE(o.frequency_mhz >= asg.floor_freq - 0.001f);
     }
     TEST_ASSERT_EQUAL_FLOAT(asg.floor_freq, asg.target_freq);
 }
 
-TEST_CASE("asg recovers toward the ceiling after sustained stability", "[asg]")
+TEST_CASE("asg undervolts for efficiency after sustained stability", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-
-    // Force one backoff.
-    drive(&asg, 3.0f, 55.0f, &clock);
-    float after_backoff = asg.target_freq;
-    TEST_ASSERT_TRUE(after_backoff < 500.0f);
-
-    // Stay healthy long enough to earn one recovery step.
     for (int i = 0; i < ASG_RECOVER_AFTER_WINDOWS; i++) {
-        drive(&asg, 0.0f, 55.0f, &clock);
+        drive(&asg, 0.0f, 55.0f, 1.0f, &clock);
     }
-    TEST_ASSERT_EQUAL_FLOAT(after_backoff + ASG_RECOVER_STEP_MHZ, asg.target_freq);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f - ASG_VOLTAGE_STEP_MV, asg.target_voltage);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f, asg.target_freq);
 }
 
-TEST_CASE("asg treats thermal pressure as instability", "[asg]")
+TEST_CASE("asg never undervolts below the voltage floor", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    // Error rate is healthy, but the chip is hot -> back off anyway.
-    float f = drive(&asg, 0.0f, ASG_THERMAL_GUARD_C + 5.0f, &clock);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, f);
+    for (int i = 0; i < 300; i++) {
+        AsgOutput o = drive(&asg, 0.0f, 55.0f, 1.0f, &clock);
+        TEST_ASSERT_TRUE(o.voltage_mv >= asg.floor_voltage - 0.001f);
+    }
+    TEST_ASSERT_EQUAL_FLOAT(asg.floor_voltage, asg.target_voltage);
 }
 
-TEST_CASE("asg ignores invalid (powered-down) temperature readings", "[asg]")
+TEST_CASE("asg restores a voltage step on mild instability after undervolting", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    // temp <= 0 means "unknown"; a healthy error rate must not trigger backoff.
-    float f = drive(&asg, 0.0f, -1.0f, &clock);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f, f);
+    for (int i = 0; i < ASG_RECOVER_AFTER_WINDOWS; i++) {
+        drive(&asg, 0.0f, 55.0f, 1.0f, &clock);
+    }
+    TEST_ASSERT_EQUAL_FLOAT(1190.0f, asg.target_voltage);
+    AsgOutput o = drive(&asg, 3.0f, 55.0f, 1.0f, &clock);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, o.voltage_mv); // margin restored, freq untouched
+    TEST_ASSERT_EQUAL_FLOAT(500.0f, o.frequency_mhz);
 }
 
-TEST_CASE("asg self-throttles decisions to the decision interval", "[asg]")
+TEST_CASE("asg hang guard restores voltage when hashrate collapses", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
-
-    // First decision at t=interval backs off once.
-    int64_t clock = ASG_DECISION_INTERVAL_MS;
-    float f1 = asg_step(&asg, 3.0f, 55.0f, clock);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, f1);
-
-    // A call shortly after must NOT make another decision.
-    float f2 = asg_step(&asg, 3.0f, 55.0f, clock + 1000);
-    TEST_ASSERT_EQUAL_FLOAT(f1, f2);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    // Simulate having undervolted and settled.
+    asg.target_voltage = 1150.0f;
+    asg.settle_windows = ASG_SETTLE_WINDOWS;
+    asg.last_decision_ms = 0;
+    // Error rate reads healthy (~0%) but the chip is barely hashing.
+    AsgOutput o = asg_step(&asg, 0.0f, 55.0f, 0.4f, ASG_DECISION_INTERVAL_MS);
+    TEST_ASSERT_EQUAL_FLOAT(1150.0f + 2.0f * ASG_VOLTAGE_STEP_MV, o.voltage_mv);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, o.frequency_mhz);
 }
 
-TEST_CASE("asg disabled returns the full ceiling", "[asg]")
+TEST_CASE("asg hang guard does not fire before the settle window elapses", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
-    asg.target_freq = 420.0f; // pretend it had wound down
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    asg.target_voltage = 1150.0f;
+    asg.settle_windows = 0; // just changed something
+    asg.last_decision_ms = 0;
+    AsgOutput o = asg_step(&asg, 0.0f, 55.0f, 0.4f, ASG_DECISION_INTERVAL_MS);
+    TEST_ASSERT_EQUAL_FLOAT(1150.0f, o.voltage_mv); // unchanged; collapse not trusted yet
+}
+
+TEST_CASE("asg treats thermal pressure as instability without raising voltage", "[asg]")
+{
+    AsgState asg;
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    int64_t clock = 0;
+    AsgOutput o = drive(&asg, 0.0f, ASG_THERMAL_GUARD_C + 5.0f, 1.0f, &clock);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, o.frequency_mhz);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, o.voltage_mv);
+}
+
+TEST_CASE("asg pins voltage to the ceiling when voltage control is off", "[asg]")
+{
+    AsgState asg;
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    asg.voltage_control = false;
+    int64_t clock = 0;
+    AsgOutput o = {0};
+    for (int i = 0; i < ASG_RECOVER_AFTER_WINDOWS + 2; i++) {
+        o = drive(&asg, 0.0f, 55.0f, 1.0f, &clock);
+    }
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, o.voltage_mv); // never undervolts
+}
+
+TEST_CASE("asg disabled returns the full ceilings", "[asg]")
+{
+    AsgState asg;
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    asg.target_freq = 420.0f;
+    asg.target_voltage = 1100.0f;
     asg.enabled = false;
-    float f = asg_step(&asg, 99.0f, 90.0f, 999999);
-    TEST_ASSERT_EQUAL_FLOAT(500.0f, f);
+    AsgOutput o = asg_step(&asg, 99.0f, 90.0f, 0.1f, 999999);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f, o.frequency_mhz);
+    TEST_ASSERT_EQUAL_FLOAT(1200.0f, o.voltage_mv);
 }
 
-TEST_CASE("asg re-probes from the new ceiling when the user changes frequency", "[asg]")
+TEST_CASE("asg re-probes from new ceilings when the user changes settings", "[asg]")
 {
     AsgState asg;
-    asg_init(&asg, 500.0f, 2.0f);
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
     int64_t clock = 0;
-    drive(&asg, 6.0f, 55.0f, &clock); // wind down
+    drive(&asg, 6.0f, 55.0f, 1.0f, &clock); // wind freq down
     TEST_ASSERT_TRUE(asg.target_freq < 500.0f);
 
     asg_set_ceiling(&asg, 480.0f);
     TEST_ASSERT_EQUAL_FLOAT(480.0f, asg.target_freq);
     TEST_ASSERT_EQUAL_FLOAT(480.0f * ASG_FLOOR_FRACTION, asg.floor_freq);
+
+    asg_set_voltage_ceiling(&asg, 1100.0f);
+    TEST_ASSERT_EQUAL_FLOAT(1100.0f, asg.target_voltage);
+    TEST_ASSERT_EQUAL_FLOAT(1100.0f * ASG_VOLTAGE_FLOOR_FRACTION, asg.floor_voltage);
+}
+
+TEST_CASE("asg self-throttles decisions to the decision interval", "[asg]")
+{
+    AsgState asg;
+    asg_init(&asg, 500.0f, 1200.0f, 2.0f);
+    AsgOutput o1 = asg_step(&asg, 3.0f, 55.0f, 1.0f, ASG_DECISION_INTERVAL_MS);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f - ASG_BACKOFF_GENTLE_MHZ, o1.frequency_mhz);
+    AsgOutput o2 = asg_step(&asg, 3.0f, 55.0f, 1.0f, ASG_DECISION_INTERVAL_MS + 1000);
+    TEST_ASSERT_EQUAL_FLOAT(o1.frequency_mhz, o2.frequency_mhz);
 }

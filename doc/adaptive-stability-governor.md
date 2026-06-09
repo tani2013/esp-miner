@@ -1,98 +1,120 @@
 # Adaptive Stability Governor (ASG)
 
-The Adaptive Stability Governor is a closed-loop frequency controller that runs
-**on the device** and keeps the ASIC operating just below its instability
-threshold. Instead of running a single fixed frequency/voltage forever, the ASG
-continuously tracks the chip's *real* stable operating point and follows it as
-conditions change.
+The Adaptive Stability Governor is a closed-loop controller that runs **on the
+device** and keeps the ASIC at the sweet spot between stability and efficiency.
+Instead of running a single fixed frequency/voltage forever, the ASG jointly
+tunes **frequency** and **core voltage**, continuously tracking the chip's *real*
+operating point and following it as conditions change.
 
 ## Why it exists
 
-Every ASIC sample is slightly different ("silicon lottery"), and the frequency a
-chip can sustain shifts with ambient temperature. A fixed frequency is therefore
-either:
+Every ASIC sample is slightly different ("silicon lottery"), and the frequency
+and voltage a chip can sustain shift with ambient temperature. A fixed setting is
+therefore either:
 
-- **too high** when the room warms up → rising hardware errors, rejected shares,
-  wasted power on invalid work; or
-- **too low** the rest of the time → performance left on the table.
+- **too aggressive** when the room warms up → rising hardware errors, rejected
+  shares, wasted power on invalid work; or
+- **too conservative** the rest of the time → performance and efficiency left on
+  the table.
 
 Most autotuners run on a host PC and react mainly to temperature. The ASG instead
-uses the **live hardware error rate** (`error_percentage`, derived from the ASIC's
-own error counters by the hashrate monitor) as its primary feedback signal —
-because a rising error rate is the *earliest* sign that a chip is being pushed
-past its stable point, well before shares start getting rejected.
+runs in firmware and uses the **live hardware error rate** (`error_percentage`,
+derived from the ASIC's own error counters by the hashrate monitor) as its
+primary feedback signal — a rising error rate is the *earliest* sign a chip is
+being pushed past its stable point, well before shares get rejected.
+
+## What it controls
+
+| Knob | Goal | Behaviour |
+|------|------|-----------|
+| **Frequency** | stability (safety-first) | Lowered when the chip is unstable or hot; recovered toward the ceiling once it has been healthy at the voltage floor. |
+| **Voltage** | efficiency | While healthy and cool, undervolted one small step at a time to find the lowest voltage that still mines cleanly at the current frequency (best J/TH). Restored when instability appears. |
+
+The two loops are arbitrated by priority so they never fight: **stability always
+wins**. Instability or heat reduces frequency (and restores voltage margin);
+only a calm, healthy, cool chip is allowed to undervolt for efficiency.
 
 ## Safety model
 
-The single most important property:
+Two properties make this safe to run unattended:
 
-> **The governor never raises frequency above the user-configured ceiling.**
+> **1. The governor never raises frequency or voltage above the user-configured
+> ceilings.** It can only ever be *more* conservative than what you set.
+> Frequency is clamped to `[80% … 100%]` of the ceiling and voltage to
+> `[90% … 100%]` of the ceiling, so neither can collapse.
 
-It can only *lower* the frequency from the value you set, and slowly recover back
-up toward it once the chip is healthy again. This means the ASG can never push
-the hardware beyond limits you have already chosen — in the worst case it is
-simply more conservative than a fixed setting. Voltage is left untouched at your
-configured value; lowering frequency at a fixed voltage *increases* stability
-margin.
+> **2. Hang guard.** Undervolting too far can wedge a chip so it stops producing
+> shares — and in that state the error rate misleadingly reads ~0% (there is no
+> hashrate to be wrong). The governor therefore also watches the ratio of actual
+> to expected hashrate; a collapse (< 60% of expected) is treated as strong
+> instability and voltage is restored decisively.
 
-It also layers cleanly under the existing overheat protection in
-`power_management_task` — if the firmware's hard thermal limits trip, that path
-still runs exactly as before.
+The existing hard overheat protection in `power_management_task` is untouched and
+still runs underneath all of this.
 
 ## How it works
 
-Every `ASG_DECISION_INTERVAL_MS` (15 s) the governor evaluates one decision:
+Every `ASG_DECISION_INTERVAL_MS` (15 s) the governor evaluates one decision, in
+priority order:
 
-| Condition | Action |
-|-----------|--------|
-| error rate > `target × 2.5` (critical) | drop hard (−10 MHz), reset stability clock |
-| error rate > target, or chip warm (> 68 °C) | ease off (−2 MHz), reset stability clock |
-| healthy for `8` consecutive windows (~2 min) **and** thermally comfortable | recover (+1 MHz) toward the ceiling |
-
-The target frequency is always clamped to `[80% of ceiling … ceiling]`, so it
-can never collapse to nothing. Between decisions the governor holds steady to let
-the chip — and the error-rate signal — settle after each change.
+1. **Hashrate collapsed** (< 60% of expected, after a settle window): restore
+   voltage fast (+20 mV), ease frequency (−2 MHz).
+2. **Critical errors** (> `target × 2.5`): restore voltage fast (+20 mV), drop
+   frequency hard (−10 MHz).
+3. **Too hot** (chip > 68 °C): drop frequency (−2 MHz). Voltage is *not* raised
+   (that would add heat).
+4. **Mild errors** (> target): restore one voltage step (+10 mV) if undervolted,
+   otherwise ease frequency (−2 MHz).
+5. **Healthy and cool**: after ~2 min stable, undervolt one step (−10 mV) toward
+   the efficiency floor; once at the voltage floor, recover frequency (+1 MHz)
+   toward the ceiling.
 
 ## Configuration
 
-Two settings, both exposed via the standard `PATCH /api/system` endpoint and
+Three settings, all exposed via the standard `PATCH /api/system` endpoint and
 persisted in NVS:
 
 | REST field | NVS key | Type | Default | Range | Meaning |
 |------------|---------|------|---------|-------|---------|
 | `asgEnabled` | `asg_enabled` | bool | `true` | 0–1 | master on/off switch |
+| `asgVoltageControl` | `asg_vctrl` | bool | `true` | 0–1 | allow voltage (efficiency) control; if off, only frequency is governed |
 | `asgErrorTarget` | `asg_err_tgt` | u16 | `2` | 1–10 | desired steady-state HW error rate (%) |
 
-Example — disable the governor:
+Examples:
 
 ```bash
+# disable the governor entirely (restores full configured freq + voltage)
 curl -X PATCH http://<bitaxe-ip>/api/system -H 'Content-Type: application/json' \
      -d '{"asgEnabled": 0}'
-```
 
-Example — run it tighter (aim for 1% errors):
+# stability-only mode: govern frequency but never touch voltage
+curl -X PATCH http://<bitaxe-ip>/api/system -H 'Content-Type: application/json' \
+     -d '{"asgVoltageControl": 0}'
 
-```bash
+# run tighter (aim for 1% errors)
 curl -X PATCH http://<bitaxe-ip>/api/system -H 'Content-Type: application/json' \
      -d '{"asgErrorTarget": 1}'
 ```
 
+These can also be controlled from the AxeOS web dashboard (ASG panel).
+
 ## Telemetry
 
-`GET /api/system/info` gains three additive (backward-compatible) fields:
+`GET /api/system/info` gains these additive (backward-compatible) fields:
 
 - `asgTargetFrequency` — the governor's current commanded frequency (MHz)
-- `asgEnabled`
-- `asgErrorTarget`
+- `asgTargetVoltage` — the governor's current commanded core voltage (mV)
+- `asgEnabled`, `asgVoltageControl`, `asgErrorTarget`
 
-The governor also logs every frequency change over the serial console / log
-buffer under the `power_management` tag, e.g.:
+The governor also logs every change over the serial console / log buffer under
+the `power_management` tag, e.g.:
 
 ```
-ASG: 525 -> 523 MHz (err 2.43%, target 2%, ceil 525 MHz, ASIC 64.1C)
+ASG freq: 525 -> 523 MHz (err 2.43%, ceil 525 MHz, ASIC 64.1C, hr 99%)
+ASG volt: 1200 -> 1190 mV (ceil 1200 mV, err 0.12%)
 ```
 
-## Tuning constants
+## Tuning constants & tests
 
 All control constants live at the top of `main/asg.h` and are covered by the
 unit tests in `test/main/asg_test.c`. The control logic in `main/asg.c` is free
