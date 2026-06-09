@@ -1,18 +1,13 @@
 name: ESP-IDF Build
 
 # Builds the FULL firmware and uploads esp-miner.bin + www.bin + a flashable
-# factory image as artifacts.
-#
-# NOTE: This is currently a manual (workflow_dispatch) job. The full-firmware
-# build has a pre-existing LVGL integration issue in CI that is unrelated to
-# application code: the managed `lvgl__lvgl` component includes `lv_conf.h`
-# (which lives in `main/lv_conf.h`) but does not list `main` in its REQUIRES,
-# so a clean CI build fails with "lv_conf.h: No such file or directory". The
-# isolated unit-test project (test-ci, built by unittest.yml) is unaffected and
-# continues to gate PRs. Once the lv_conf.h discovery is resolved, switch the
-# trigger back to push/pull_request to publish flashable binaries automatically.
+# factory image as artifacts. lv_conf.h discovery is handled by a global include
+# added in the root CMakeLists.txt.
 
 on:
+  push:
+    branches: [ master, main, 'claude/**' ]
+  pull_request:
   workflow_dispatch:
 
 env:
