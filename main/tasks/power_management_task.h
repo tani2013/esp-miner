@@ -11,7 +11,8 @@ typedef struct
     float vr_temp;
     float voltage;
     float frequency_value;
-    float actual_frequency;    
+    float actual_frequency;
+    float asg_target_frequency;
     float expected_hashrate;
     float power;
     float current;

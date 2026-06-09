@@ -19,6 +19,8 @@
 #include "asic_init.h"
 #include "asic_reset.h"
 #include "driver/uart.h"
+#include "esp_timer.h"
+#include "asg.h"
 
 #define POLL_RATE 100
 #define MAX_TEMP 90.0
@@ -134,6 +136,12 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     uint16_t last_known_asic_voltage = 0;
     float last_known_asic_frequency = 0.0;
     bool is_paused = false;
+
+    // Adaptive Stability Governor: starts at the configured frequency (its
+    // ceiling) and only ever winds down from there for stability.
+    AsgState asg;
+    asg_init(&asg, power_management->frequency_value, (float) nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET));
+    asg.enabled = nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED);
 
     while (1) {
         if (GLOBAL_STATE->SELF_TEST_MODULE.is_finished) {
@@ -253,6 +261,48 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             ASIC_set_nonce_space(GLOBAL_STATE);
             
             last_asic_frequency = asic_frequency;
+        }
+
+        // --- Adaptive Stability Governor (ASG) ---
+        // Uses the live hardware error rate as feedback to keep the chip just
+        // below its instability threshold. It can only ever lower the frequency
+        // below the user-configured ceiling, never raise it above.
+        bool asg_enabled = nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED);
+        uint16_t asg_err_target = nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET);
+
+        asg.enabled = asg_enabled;
+        asg_set_error_target(&asg, (float) asg_err_target);
+        // Keep the ceiling aligned with the user-configured frequency (re-probes
+        // from the top whenever the user changes the target frequency).
+        if (asic_frequency != asg.ceiling_freq) {
+            asg_set_ceiling(&asg, asic_frequency);
+        }
+
+        if (asg_enabled) {
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            float asg_target = asg_step(&asg, sys_module->error_percentage,
+                                        power_management->chip_temp_avg, now_ms);
+            power_management->asg_target_frequency = asg_target;
+
+            if (fabsf(asg_target - power_management->frequency_value) >= 0.5f) {
+                ESP_LOGI(TAG, "ASG: %.0f -> %.0f MHz (err %.2f%%, target %u%%, ceil %.0f MHz, ASIC %.1fC)",
+                         power_management->frequency_value, asg_target,
+                         sys_module->error_percentage, (unsigned) asg_err_target,
+                         asg.ceiling_freq, power_management->chip_temp_avg);
+                power_management->frequency_value = asg_target;
+                power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
+                ASIC_set_frequency(GLOBAL_STATE);
+                ASIC_set_nonce_space(GLOBAL_STATE);
+            }
+        } else {
+            // Governor off: honor the full configured frequency.
+            power_management->asg_target_frequency = asic_frequency;
+            if (asic_frequency != power_management->frequency_value) {
+                power_management->frequency_value = asic_frequency;
+                power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
+                ASIC_set_frequency(GLOBAL_STATE);
+                ASIC_set_nonce_space(GLOBAL_STATE);
+            }
         }
 
         // Check for changing of overheat mode
