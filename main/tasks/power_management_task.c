@@ -117,6 +117,84 @@ void POWER_MANAGEMENT_init_frequency(void * pvParameters)
     ESP_LOGI(TAG, "ASIC Frequency: %g MHz, Expected hashrate: %sH/s", frequency, expected_hashrate_str);
 }
 
+// Apply the Adaptive Stability Governor for one control tick. Kept out of
+// POWER_MANAGEMENT_task so the main loop stays readable. asic_frequency and
+// core_voltage are the user-configured ceilings (from NVS); asg_applied_voltage
+// and last_core_voltage track what has actually been pushed to the hardware so
+// the governor and the NVS-driven voltage path don't fight each other.
+static void asg_reconcile(GlobalState * GLOBAL_STATE, AsgState * asg,
+                          float asic_frequency, uint16_t core_voltage,
+                          float * asg_applied_voltage, uint16_t * last_core_voltage)
+{
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    SystemModule * sys_module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    bool asg_enabled = nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED);
+    uint16_t asg_err_target = nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET);
+    bool asg_vctrl = nvs_config_get_bool(NVS_CONFIG_ASG_VOLTAGE_CONTROL);
+
+    asg->enabled = asg_enabled;
+    asg->voltage_control = asg_vctrl;
+    asg_set_error_target(asg, (float) asg_err_target);
+    // Keep the ceilings aligned with the user-configured values (re-probes from
+    // the top whenever the user changes frequency or voltage).
+    if (asic_frequency != asg->ceiling_freq) {
+        asg_set_ceiling(asg, asic_frequency);
+    }
+    if ((float) core_voltage != asg->ceiling_voltage) {
+        asg_set_voltage_ceiling(asg, (float) core_voltage);
+    }
+
+    float asg_desired_voltage;
+    if (asg_enabled) {
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        float hr_ratio = power_management->expected_hashrate > 0.0f
+            ? sys_module->current_hashrate / power_management->expected_hashrate
+            : 1.0f;
+
+        AsgOutput out = asg_step(asg, sys_module->error_percentage,
+                                 power_management->chip_temp_avg, hr_ratio, now_ms);
+        power_management->asg_target_frequency = out.frequency_mhz;
+        power_management->asg_target_voltage = out.voltage_mv;
+        asg_desired_voltage = out.voltage_mv;
+
+        if (fabsf(out.frequency_mhz - power_management->frequency_value) >= 0.5f) {
+            ESP_LOGI(TAG, "ASG freq: %.0f -> %.0f MHz (err %.2f%%, ceil %.0f MHz, ASIC %.1fC, hr %.0f%%)",
+                     power_management->frequency_value, out.frequency_mhz,
+                     sys_module->error_percentage, asg->ceiling_freq,
+                     power_management->chip_temp_avg, hr_ratio * 100.0f);
+            power_management->frequency_value = out.frequency_mhz;
+            power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
+            ASIC_set_frequency(GLOBAL_STATE);
+            ASIC_set_nonce_space(GLOBAL_STATE);
+        }
+    } else {
+        // Governor off: honor the full configured frequency and voltage.
+        power_management->asg_target_frequency = asic_frequency;
+        power_management->asg_target_voltage = (float) core_voltage;
+        asg_desired_voltage = (float) core_voltage;
+        if (asic_frequency != power_management->frequency_value) {
+            power_management->frequency_value = asic_frequency;
+            power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
+            ASIC_set_frequency(GLOBAL_STATE);
+            ASIC_set_nonce_space(GLOBAL_STATE);
+        }
+    }
+
+    // Reconcile core voltage to the governor's desired value. asg_step pins this
+    // to the ceiling when voltage control (or the whole governor) is off, so this
+    // also restores full voltage when those are disabled.
+    if (fabsf(asg_desired_voltage - *asg_applied_voltage) >= 1.0f) {
+        ESP_LOGI(TAG, "ASG volt: %.0f -> %.0f mV (ceil %.0f mV, err %.2f%%)",
+                 *asg_applied_voltage, asg_desired_voltage,
+                 asg->ceiling_voltage, sys_module->error_percentage);
+        VCORE_set_voltage(GLOBAL_STATE, (double) asg_desired_voltage / 1000.0);
+        *asg_applied_voltage = asg_desired_voltage;
+        // Keep the NVS-driven voltage path from fighting the governor.
+        *last_core_voltage = core_voltage;
+    }
+}
+
 void POWER_MANAGEMENT_task(void * pvParameters)
 {
     ESP_LOGI(TAG, "Starting");
@@ -269,75 +347,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             last_asic_frequency = asic_frequency;
         }
 
-        // --- Adaptive Stability Governor (ASG v2: frequency + voltage) ---
-        // Uses the live hardware error rate (plus a hashrate-collapse guard) to
-        // keep the chip just below its instability threshold and, while healthy,
-        // undervolt toward the efficiency edge. It can only ever lower frequency
-        // and voltage below the user-configured ceilings, never raise them above.
-        bool asg_enabled = nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED);
-        uint16_t asg_err_target = nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET);
-        bool asg_vctrl = nvs_config_get_bool(NVS_CONFIG_ASG_VOLTAGE_CONTROL);
-
-        asg.enabled = asg_enabled;
-        asg.voltage_control = asg_vctrl;
-        asg_set_error_target(&asg, (float) asg_err_target);
-        // Keep the ceilings aligned with the user-configured values (re-probes
-        // from the top whenever the user changes frequency or voltage).
-        if (asic_frequency != asg.ceiling_freq) {
-            asg_set_ceiling(&asg, asic_frequency);
-        }
-        if ((float) core_voltage != asg.ceiling_voltage) {
-            asg_set_voltage_ceiling(&asg, (float) core_voltage);
-        }
-
-        float asg_desired_voltage;
-        if (asg_enabled) {
-            int64_t now_ms = esp_timer_get_time() / 1000;
-            float hr_ratio = power_management->expected_hashrate > 0.0f
-                ? sys_module->current_hashrate / power_management->expected_hashrate
-                : 1.0f;
-
-            AsgOutput out = asg_step(&asg, sys_module->error_percentage,
-                                     power_management->chip_temp_avg, hr_ratio, now_ms);
-            power_management->asg_target_frequency = out.frequency_mhz;
-            power_management->asg_target_voltage = out.voltage_mv;
-            asg_desired_voltage = out.voltage_mv;
-
-            if (fabsf(out.frequency_mhz - power_management->frequency_value) >= 0.5f) {
-                ESP_LOGI(TAG, "ASG freq: %.0f -> %.0f MHz (err %.2f%%, ceil %.0f MHz, ASIC %.1fC, hr %.0f%%)",
-                         power_management->frequency_value, out.frequency_mhz,
-                         sys_module->error_percentage, asg.ceiling_freq,
-                         power_management->chip_temp_avg, hr_ratio * 100.0f);
-                power_management->frequency_value = out.frequency_mhz;
-                power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
-                ASIC_set_frequency(GLOBAL_STATE);
-                ASIC_set_nonce_space(GLOBAL_STATE);
-            }
-        } else {
-            // Governor off: honor the full configured frequency and voltage.
-            power_management->asg_target_frequency = asic_frequency;
-            power_management->asg_target_voltage = (float) core_voltage;
-            asg_desired_voltage = (float) core_voltage;
-            if (asic_frequency != power_management->frequency_value) {
-                power_management->frequency_value = asic_frequency;
-                power_management->expected_hashrate = expected_hashrate(GLOBAL_STATE);
-                ASIC_set_frequency(GLOBAL_STATE);
-                ASIC_set_nonce_space(GLOBAL_STATE);
-            }
-        }
-
-        // Reconcile core voltage to the governor's desired value. asg_step pins
-        // this to the ceiling when voltage control (or the whole governor) is
-        // off, so this also restores full voltage when those are disabled.
-        if (fabsf(asg_desired_voltage - asg_applied_voltage) >= 1.0f) {
-            ESP_LOGI(TAG, "ASG volt: %.0f -> %.0f mV (ceil %.0f mV, err %.2f%%)",
-                     asg_applied_voltage, asg_desired_voltage,
-                     asg.ceiling_voltage, sys_module->error_percentage);
-            VCORE_set_voltage(GLOBAL_STATE, (double) asg_desired_voltage / 1000.0);
-            asg_applied_voltage = asg_desired_voltage;
-            // Keep the NVS-driven voltage path from fighting the governor.
-            last_core_voltage = core_voltage;
-        }
+        // Adaptive Stability Governor: govern frequency + voltage for this tick.
+        asg_reconcile(GLOBAL_STATE, &asg, asic_frequency, core_voltage,
+                      &asg_applied_voltage, &last_core_voltage);
 
         // Check for changing of overheat mode
         bool new_overheat_mode = nvs_config_get_bool(NVS_CONFIG_OVERHEAT_MODE);
