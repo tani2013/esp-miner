@@ -627,6 +627,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Profit / Performance Profile -->
+        <div class="grid-stack-item" gs-id="profit">
+            <div class="grid-stack-item-content">
+                <div class="card">
+                    <div class="flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">Profit / Performance Profile</h4>
+                    </div>
+
+                    <div class="flex flex-nowrap mb-3">
+                        <div class="col-fixed-width text-500">
+                            <span>Live Efficiency</span>
+                        </div>
+                        <div>
+                            <ng-container *ngIf="getLiveEfficiency(info) as efficiency; else noValue">
+                                {{ efficiency | number: '1.1-1' }} J/TH
+                                <span class="text-500">({{ getEfficiencyQuality(efficiency) }})</span>
+                            </ng-container>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button pButton type="button" (click)="applyProfile('eco')"
+                            pTooltip="Lower frequency and voltage for best efficiency"
+                            tooltipPosition="top">Eco</button>
+                        <button pButton type="button" (click)="applyProfile('balanced')"
+                            pTooltip="Vendor default frequency and voltage"
+                            tooltipPosition="top">Balanced</button>
+                        <button pButton type="button" (click)="applyProfile('turbo')"
+                            pTooltip="Higher frequency and voltage for maximum hashrate"
+                            tooltipPosition="top">Turbo</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <app-confetti *ngIf="info.showNewBlock"></app-confetti>

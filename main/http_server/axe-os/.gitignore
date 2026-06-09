@@ -37,8 +37,10 @@ yarn-error.log
 /connect.lock
 /coverage
 /libpeerconnection.log
+# Test output
 testem.log
 /typings
+report.xml
 
 # System files
 .DS_Store

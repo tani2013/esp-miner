@@ -23,6 +23,7 @@ import { chartLabelKey } from 'src/models/enum/eChartLabel';
 import { LocalStorageService } from 'src/app/local-storage.service';
 import { GridStack, GridItemHTMLElement } from 'gridstack';
 import { DashboardEditService, WidgetDef } from 'src/app/services/dashboard-edit.service';
+import { AsicProfileInfo, MiningProfile, computeMiningProfile, efficiencyJTH } from 'src/app/utils/mining-profile';
 
 type PoolLabel = 'Primary' | 'Fallback';
 type MessageType =
@@ -65,6 +66,7 @@ const WIDGET_DEFAULTS: WidgetDef[] = [
   { id: 'blockheader', label: 'Block Header',        x: 4, y: 12,  w: 4,  h: 6,  minW: 2, minH: 3 },
   { id: 'registers',   label: 'Hashrate Registers',  x: 8, y: 12,  w: 4,  h: 6,  minW: 2, minH: 3 },
   { id: 'asg',         label: 'Adaptive Stability Governor', x: 0, y: 18, w: 4, h: 7, minW: 2, minH: 3 },
+  { id: 'profit',      label: 'Profit / Performance Profile', x: 4, y: 18, w: 4, h: 7, minW: 2, minH: 3 },
 ];
 
 const ASG_CHART_MAX_POINTS = 60;
@@ -167,6 +169,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   private liveDataStarted = false;
   private resizeTimer: any;
   public form!: FormGroup;
+
+  private asicSettings?: AsicProfileInfo;
 
   @Input() uri = '';
 
@@ -712,6 +716,82 @@ export class HomeComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.toastr.error(`Could not update Adaptive Stability Governor. ${err.message}`);
+        }
+      });
+  }
+
+  /**
+   * Live efficiency in J/TH for the current info snapshot, or null if not computable.
+   */
+  public getLiveEfficiency(info: ISystemInfo): number | null {
+    if (info.power_fault) {
+      return null;
+    }
+    return efficiencyJTH(info.power, info.hashRate);
+  }
+
+  /**
+   * Qualitative label for a J/TH efficiency value.
+   */
+  public getEfficiencyQuality(efficiency: number | null): string {
+    if (efficiency == null) {
+      return '';
+    }
+    if (efficiency < 20) {
+      return 'great';
+    }
+    if (efficiency < 30) {
+      return 'good';
+    }
+    return 'high';
+  }
+
+  public applyProfile(profile: MiningProfile): void {
+    if (profile === 'turbo') {
+      const confirmed = window.confirm(
+        'Turbo pushes the ASIC frequency and core voltage higher for more hashrate. ' +
+        'The Adaptive Stability Governor will keep it safe by backing off if instability is detected. Continue?'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    if (this.asicSettings) {
+      this.sendProfile(profile, this.asicSettings);
+      return;
+    }
+
+    this.systemService.getAsicSettings(this.uri)
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
+        next: (asic) => {
+          this.asicSettings = {
+            defaultFrequency: asic.defaultFrequency,
+            frequencyOptions: asic.frequencyOptions,
+            defaultVoltage: asic.defaultVoltage,
+            voltageOptions: asic.voltageOptions
+          };
+          this.sendProfile(profile, this.asicSettings);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.toastr.error(`Could not load ASIC settings. ${err.message}`);
+        }
+      });
+  }
+
+  private sendProfile(profile: MiningProfile, asic: AsicProfileInfo): void {
+    const settings = computeMiningProfile(profile, asic);
+
+    this.systemService.updateSystem(this.uri, { ...settings, asgEnabled: 1, asgVoltageControl: 1 })
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
+        next: () => {
+          const name = profile.charAt(0).toUpperCase() + profile.slice(1);
+          this.toastr.success(`Applied ${name} profile: ${settings.frequency} MHz / ${settings.coreVoltage} mV`);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.toastr.error(`Could not apply ${profile} profile. ${err.message}`);
         }
       });
   }
