@@ -52,9 +52,10 @@ jobs:
       - run: pip install esptool
 
       - name: Create factory/merged image
-        run: ./merge_bin.sh ./esp-miner-merged.bin
+        run: bash ./merge_bin.sh ./esp-miner-merged.bin
 
       - name: Upload flashable firmware (esp-miner.bin + www.bin + factory image)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: esp-miner-firmware
