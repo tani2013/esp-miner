@@ -165,6 +165,12 @@ export class EditComponent implements OnInit, OnDestroy, OnChanges {
           manualFanSpeed: [info.manualFanSpeed, [Validators.required]],
           temptarget: [info.temptarget, [Validators.required]],
           overheat_mode: [info.overheat_mode, [Validators.required]],
+          asgEnabled: [info.asgEnabled == 1],
+          asgVoltageControl: [info.asgVoltageControl == 1],
+          asgErrorTarget: [info.asgErrorTarget, [
+            Validators.min(1),
+            Validators.max(10)
+          ]],
           statsFrequency: [info.statsFrequency, [
             Validators.required,
             Validators.min(0),

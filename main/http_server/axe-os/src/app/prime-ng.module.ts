@@ -8,6 +8,7 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
+import { InputSwitchModule } from 'primeng/inputswitch';
 import { SidebarModule } from 'primeng/sidebar';
 import { SliderModule } from 'primeng/slider';
 import { InputTextareaModule } from 'primeng/inputtextarea';
@@ -17,6 +18,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
 const primeNgModules = [
     SidebarModule,
     InputTextModule,
+    InputSwitchModule,
     CheckboxModule,
     DropdownModule,
     SliderModule,

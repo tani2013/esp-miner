@@ -64,7 +64,10 @@ const WIDGET_DEFAULTS: WidgetDef[] = [
   { id: 'pool',        label: 'Pool',                x: 0, y: 12,  w: 4,  h: 6,  minW: 2, minH: 3 },
   { id: 'blockheader', label: 'Block Header',        x: 4, y: 12,  w: 4,  h: 6,  minW: 2, minH: 3 },
   { id: 'registers',   label: 'Hashrate Registers',  x: 8, y: 12,  w: 4,  h: 6,  minW: 2, minH: 3 },
+  { id: 'asg',         label: 'Adaptive Stability Governor', x: 0, y: 18, w: 4, h: 7, minW: 2, minH: 3 },
 ];
+
+const ASG_CHART_MAX_POINTS = 60;
 
 @Component({
   selector: 'app-home',
@@ -85,6 +88,11 @@ export class HomeComponent implements OnInit, OnDestroy {
   public chartY1Data: number[] = [];
   public chartY2Data: number[] = [];
   public chartData?: any;
+
+  public asgChartOptions: any;
+  public asgChartData?: any;
+  public asgFrequencyData: number[] = [];
+  public asgChartLabels: number[] = [];
 
   public maxPower: number = 0;
   public nominalVoltage: number = 0;
@@ -176,6 +184,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     public layoutService: LayoutService
   ) {
     this.initializeChart();
+    this.initializeAsgChart();
 
     effect(() => {
       // Refresh grid when wide view toggles
@@ -214,6 +223,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.updateChartColors();
+        this.updateAsgChartColors();
       });
 
     this.pageDefaultTitle = this.titleService.getTitle();
@@ -602,6 +612,110 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.chartData.datasets[1].data = this.chartY2Data;
   }
 
+  private initializeAsgChart() {
+    const documentStyle = getComputedStyle(document.documentElement);
+    const textColorSecondary = documentStyle.getPropertyValue('--text-color-secondary');
+    const surfaceBorder = documentStyle.getPropertyValue('--surface-border');
+    const primaryColor = documentStyle.getPropertyValue('--primary-color');
+
+    this.asgChartData = {
+      labels: this.asgChartLabels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Target Frequency',
+          data: this.asgFrequencyData,
+          fill: true,
+          backgroundColor: primaryColor + '30',
+          borderColor: primaryColor,
+          tension: 0,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 1,
+          hidden: false
+        }
+      ]
+    };
+
+    this.asgChartOptions = {
+      responsive: true,
+      animation: false,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label: (tooltipItem: any) => `${tooltipItem.raw} MHz`
+          }
+        }
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      scales: {
+        x: {
+          ticks: {
+            display: false
+          },
+          grid: {
+            color: surfaceBorder,
+            drawBorder: false,
+            display: false
+          }
+        },
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          ticks: {
+            color: textColorSecondary,
+            callback: (value: number) => `${value}`
+          },
+          grid: {
+            color: surfaceBorder,
+            drawBorder: false
+          }
+        }
+      }
+    };
+  }
+
+  private updateAsgChartColors() {
+    const documentStyle = getComputedStyle(document.documentElement);
+    const textColorSecondary = documentStyle.getPropertyValue('--text-color-secondary');
+    const surfaceBorder = documentStyle.getPropertyValue('--surface-border');
+    const primaryColor = documentStyle.getPropertyValue('--primary-color');
+
+    if (this.asgChartData && this.asgChartData.datasets) {
+      this.asgChartData.datasets[0].backgroundColor = primaryColor + '30';
+      this.asgChartData.datasets[0].borderColor = primaryColor;
+    }
+
+    if (this.asgChartOptions) {
+      this.asgChartOptions.scales.x.grid.color = surfaceBorder;
+      this.asgChartOptions.scales.y.ticks.color = textColorSecondary;
+      this.asgChartOptions.scales.y.grid.color = surfaceBorder;
+    }
+
+    this.asgChartData = { ...this.asgChartData };
+  }
+
+  public toggleAsg(enabled: boolean) {
+    this.systemService.updateSystem(this.uri, { asgEnabled: enabled ? 1 : 0 })
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
+        next: () => {
+          this.toastr.success(`Adaptive Stability Governor ${enabled ? 'enabled' : 'disabled'}`);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.toastr.error(`Could not update Adaptive Stability Governor. ${err.message}`);
+        }
+      });
+  }
+
   private loadPreviousData() {
     const chartY1DataLabel = this.form.get('chartY1Data')?.value;
     const chartY2DataLabel = this.form.get('chartY2Data')?.value;
@@ -774,6 +888,17 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.activePoolUser = isFallbackPool ? info.fallbackStratumUser : info.stratumUser;
         this.activePoolPort = isFallbackPool ? info.fallbackStratumPort : info.stratumPort;
         this.responseTime = info.responseTime;
+
+        // Accumulate ASG target frequency into a rolling window for the ASG chart
+        if (info.asgTargetFrequency != null) {
+          this.asgChartLabels.push(new Date().getTime());
+          this.asgFrequencyData.push(info.asgTargetFrequency);
+          while (this.asgFrequencyData.length > ASG_CHART_MAX_POINTS) {
+            this.asgChartLabels.shift();
+            this.asgFrequencyData.shift();
+          }
+          this.asgChartData = { ...this.asgChartData };
+        }
       }),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1));

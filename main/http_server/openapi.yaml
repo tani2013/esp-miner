@@ -292,6 +292,21 @@ components:
         actualFrequency:
           type: number
           description: Real-time ASIC frequency in MHz
+        asgEnabled:
+          type: number
+          description: Adaptive Stability Governor master switch (0=disabled, 1=enabled)
+        asgVoltageControl:
+          type: number
+          description: Whether ASG also tunes core voltage (0=no, 1=yes)
+        asgErrorTarget:
+          type: number
+          description: ASG target HW error rate percentage (1-10)
+        asgTargetFrequency:
+          type: number
+          description: ASG current commanded frequency in MHz (read-only)
+        asgTargetVoltage:
+          type: number
+          description: ASG current commanded core voltage in mV (read-only)
         hashRate:
           type: number
           description: Current hashrate in Gh/s
@@ -725,6 +740,25 @@ components:
           enum: [0,1]
           examples:
             - 0
+        asgEnabled:
+          type: integer
+          description: Adaptive Stability Governor master switch (0=disabled, 1=enabled)
+          enum: [0, 1]
+          examples:
+            - 0
+        asgVoltageControl:
+          type: integer
+          description: Whether ASG also tunes core voltage (0=no, 1=yes)
+          enum: [0, 1]
+          examples:
+            - 0
+        asgErrorTarget:
+          type: integer
+          description: ASG target HW error rate percentage (1-10)
+          minimum: 1
+          maximum: 10
+          examples:
+            - 2
         invertscreen:
           type: integer
           description: Whether to invert screen colors (0=normal, 1=inverted)

@@ -100,6 +100,31 @@
         </div>
     </div>
 
+    <h3 class="mt-5">Adaptive Stability Governor</h3>
+
+    <div class="card">
+        <div class="field-checkbox grid my-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox name="asgEnabled" formControlName="asgEnabled" inputId="asgEnabled" [binary]="true"></p-checkbox>
+            </div>
+            <label for="asgEnabled" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">Adaptive Stability Governor</label>
+        </div>
+
+        <div class="field-checkbox grid my-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox name="asgVoltageControl" formControlName="asgVoltageControl" inputId="asgVoltageControl" [binary]="true"></p-checkbox>
+            </div>
+            <label for="asgVoltageControl" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">ASG Voltage Control (efficiency)</label>
+        </div>
+
+        <div class="field grid p-fluid">
+            <label for="asgErrorTarget" class="col-12 md:col-2 md:m-0">ASG Target Error Rate (%)</label>
+            <div class="col-12 md:col-10">
+                <input pInputText id="asgErrorTarget" formControlName="asgErrorTarget" type="number" min="1" max="10" />
+            </div>
+        </div>
+    </div>
+
     <h3 class="mt-5">Display</h3>
 
     <div class="card">
