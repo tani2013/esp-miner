@@ -1,0 +1,29 @@
+name: Native Logic Tests
+
+# Compiles and RUNS the pure-logic unit tests (Adaptive Stability Governor and
+# the Solo Sniper block tracker) with a plain host compiler. These modules are
+# deliberately free of ESP-IDF dependencies, so their logic can be executed
+# directly in CI on every push - fast, and independent of the QEMU test app.
+
+on:
+  push:
+    branches: [ master, main, 'claude/**' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Build and run ASG logic tests
+        run: |
+          gcc -Wall -Wextra -O2 -I main test/native/asg_test_native.c main/asg.c -o asg_native -lm
+          ./asg_native
+
+      - name: Build and run block tracker logic tests
+        run: |
+          gcc -Wall -Wextra -O2 -I main test/native/block_tracker_test_native.c main/block_tracker.c -o bt_native
+          ./bt_native
