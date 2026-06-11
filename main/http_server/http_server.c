@@ -948,6 +948,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "asgEnabled", nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED));
     cJSON_AddNumberToObject(root, "asgErrorTarget", nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET));
     cJSON_AddNumberToObject(root, "asgVoltageControl", nvs_config_get_bool(NVS_CONFIG_ASG_VOLTAGE_CONTROL));
+    cJSON_AddNumberToObject(root, "blocksSeen", GLOBAL_STATE->SYSTEM_MODULE.blocks_seen);
+    int64_t asg_last_block_us = GLOBAL_STATE->SYSTEM_MODULE.last_block_change_us;
+    cJSON_AddNumberToObject(root, "blockAgeSeconds", asg_last_block_us > 0 ? (esp_timer_get_time() - asg_last_block_us) / 1000000.0 : -1);
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
     cJSON_AddStringToObject(root, "hostname", hostname);

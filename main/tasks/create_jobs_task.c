@@ -12,6 +12,7 @@
 #include "asic.h"
 #include "system.h"
 #include "esp_heap_caps.h"
+#include "block_tracker.h"
 
 static const char *TAG = "create_jobs_task";
 
@@ -35,6 +36,11 @@ void create_jobs_task(void *pvParameters)
     double difficulty = GLOBAL_STATE->pool_difficulty;
     mining_notify *current_mining_notification = NULL;
     uint64_t extranonce_2 = 0;
+
+    // Solo Sniper: track when the network advances to a new block so no hash is
+    // wasted on stale work and the operator can see how fresh the work is.
+    BlockTracker block_tracker;
+    block_tracker_init(&block_tracker);
     int timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
 
     ESP_LOGI(TAG, "ASIC Job Interval: %d ms", timeout_ms);
@@ -51,6 +57,15 @@ void create_jobs_task(void *pvParameters)
             }
 
             ESP_LOGI(TAG, "New Work Dequeued %s", new_mining_notification->job_id);
+
+            // Solo Sniper: detect a new network block and record it for telemetry.
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            if (block_tracker_update(&block_tracker, new_mining_notification->prev_block_hash, now_ms)) {
+                ESP_LOGI(TAG, "SOLO SNIPER: new block (seen #%lu) - switching to fresh work",
+                         (unsigned long) block_tracker.blocks_seen);
+                GLOBAL_STATE->SYSTEM_MODULE.last_block_change_us = esp_timer_get_time();
+            }
+            GLOBAL_STATE->SYSTEM_MODULE.blocks_seen = block_tracker.blocks_seen;
 
             current_mining_notification = new_mining_notification;
 

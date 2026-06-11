@@ -6,6 +6,7 @@ idf_component_register(
         "log_buffer.c"
         "nvs_config.c"
         "asg.c"
+        "block_tracker.c"
         "display.c"
         "screen.c"
         "input.c"

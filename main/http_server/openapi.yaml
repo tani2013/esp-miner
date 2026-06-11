@@ -307,6 +307,12 @@ components:
         asgTargetVoltage:
           type: number
           description: ASG current commanded core voltage in mV (read-only)
+        blocksSeen:
+          type: number
+          description: Distinct network blocks the miner switched to this session (Solo Sniper)
+        blockAgeSeconds:
+          type: number
+          description: Seconds since the last new block arrived, or -1 if none yet (Solo Sniper)
         hashRate:
           type: number
           description: Current hashrate in Gh/s

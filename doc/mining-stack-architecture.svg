@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="760" viewBox="0 0 1100 760" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f6feb"/>
+      <stop offset="1" stop-color="#0a3d8f"/>
+    </linearGradient>
+    <linearGradient id="asg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2ea043"/>
+      <stop offset="1" stop-color="#176f2c"/>
+    </linearGradient>
+    <linearGradient id="profit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a371f7"/>
+      <stop offset="1" stop-color="#6e40c9"/>
+    </linearGradient>
+    <linearGradient id="sniper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7931a"/>
+      <stop offset="1" stop-color="#b3650a"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8b949e"/>
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#3fb950"/>
+    </marker>
+    <marker id="arrowO" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#f7931a"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="760" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="40" y="52" fill="#f0f6fc" font-size="30" font-weight="700">Bitaxe Gamma 601 — Intelligent Mining Stack</text>
+  <text x="40" y="80" fill="#8b949e" font-size="15">Custom AxeOS firmware · 3 layers of on-device intelligence + zero-fee solo path</text>
+  <line x1="40" y1="96" x2="1060" y2="96" stroke="#30363d" stroke-width="1"/>
+
+  <!-- ===== Layer 1: ASG closed loop ===== -->
+  <text x="40" y="138" fill="#3fb950" font-size="14" font-weight="700" letter-spacing="2">LAYER 1 · STABILITY + EFFICIENCY (automatic)</text>
+
+  <!-- ASIC core -->
+  <rect x="60" y="160" width="200" height="120" rx="14" fill="url(#chip)" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="160" y="205" fill="#fff" font-size="20" font-weight="700" text-anchor="middle">BM1370 ASIC</text>
+  <text x="160" y="230" fill="#cfe3ff" font-size="13" text-anchor="middle">~1.2 TH/s</text>
+  <text x="160" y="252" fill="#cfe3ff" font-size="13" text-anchor="middle">freq · voltage · temp</text>
+
+  <!-- ASG box -->
+  <rect x="400" y="150" width="290" height="140" rx="14" fill="url(#asg)" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="545" y="182" fill="#fff" font-size="19" font-weight="700" text-anchor="middle">Adaptive Stability Governor</text>
+  <text x="545" y="207" fill="#d7ffe0" font-size="12.5" text-anchor="middle">closed-loop · freq + voltage</text>
+  <text x="420" y="234" fill="#eafff0" font-size="12.5">• error-rate feedback → finds the edge</text>
+  <text x="420" y="254" fill="#eafff0" font-size="12.5">• undervolt → best J/TH</text>
+  <text x="420" y="274" fill="#eafff0" font-size="12.5">• never exceeds your ceilings + hang guard</text>
+
+  <!-- feedback loop arrows -->
+  <path d="M260,195 H400" fill="none" stroke="#3fb950" stroke-width="2.5" marker-end="url(#arrowG)"/>
+  <text x="330" y="186" fill="#3fb950" font-size="11" text-anchor="middle">HW error %, temp, hashrate</text>
+  <path d="M545,290 V330 H160 V280" fill="none" stroke="#3fb950" stroke-width="2.5" marker-end="url(#arrowG)"/>
+  <text x="360" y="348" fill="#3fb950" font-size="11" text-anchor="middle">set frequency + voltage (15 s loop)</text>
+
+  <!-- ===== Layer 2: Profit engine ===== -->
+  <text x="40" y="412" fill="#a371f7" font-size="14" font-weight="700" letter-spacing="2">LAYER 2 · STRATEGY (1-click, you choose)</text>
+  <rect x="60" y="430" width="630" height="92" rx="14" fill="url(#profit)" stroke="#a371f7" stroke-width="1.5"/>
+  <text x="84" y="462" fill="#fff" font-size="18" font-weight="700">Profit Engine + Profiles</text>
+  <text x="84" y="486" fill="#efe6ff" font-size="12.5">Live efficiency (J/TH) · vendor-safe values · keeps ASG on</text>
+  <rect x="380" y="448" width="90" height="30" rx="15" fill="#1b1330" stroke="#caa8ff"/><text x="425" y="468" fill="#d9c2ff" font-size="13" text-anchor="middle">Eco</text>
+  <rect x="478" y="448" width="100" height="30" rx="15" fill="#1b1330" stroke="#caa8ff"/><text x="528" y="468" fill="#d9c2ff" font-size="13" text-anchor="middle">Balanced</text>
+  <rect x="586" y="448" width="90" height="30" rx="15" fill="#1b1330" stroke="#caa8ff"/><text x="631" y="468" fill="#d9c2ff" font-size="13" text-anchor="middle">Turbo</text>
+  <text x="84" y="510" fill="#efe6ff" font-size="11.5">Eco 500/1100 · Balanced 525/1150 · Turbo 550/1200 (MHz/mV)</text>
+
+  <!-- AxeOS UI -->
+  <rect x="740" y="150" width="320" height="372" rx="14" fill="#0f1620" stroke="#30363d" stroke-width="1.5"/>
+  <text x="900" y="182" fill="#58a6ff" font-size="17" font-weight="700" text-anchor="middle">AxeOS Web Dashboard</text>
+  <rect x="762" y="200" width="276" height="92" rx="10" fill="#11261a" stroke="#2ea043"/>
+  <text x="778" y="226" fill="#3fb950" font-size="14" font-weight="700">ASG panel</text>
+  <text x="778" y="248" fill="#9fe6b0" font-size="11.5">ON/OFF · live target-freq chart</text>
+  <text x="778" y="268" fill="#9fe6b0" font-size="11.5">target voltage · error target</text>
+  <rect x="762" y="304" width="276" height="92" rx="10" fill="#1a1330" stroke="#a371f7"/>
+  <text x="778" y="330" fill="#c8a6ff" font-size="14" font-weight="700">Profit widget</text>
+  <text x="778" y="352" fill="#dccbff" font-size="11.5">live J/TH · Eco/Balanced/Turbo</text>
+  <rect x="762" y="408" width="276" height="92" rx="10" fill="#2a1c0a" stroke="#f7931a"/>
+  <text x="778" y="434" fill="#ffb454" font-size="14" font-weight="700">Solo Sniper status</text>
+  <text x="778" y="456" fill="#ffd9a8" font-size="11.5">block height · stale-work %</text>
+  <text x="778" y="476" fill="#ffd9a8" font-size="11.5">new-block switch latency</text>
+
+  <!-- ===== Layer 3: Solo path ===== -->
+  <text x="40" y="566" fill="#f7931a" font-size="14" font-weight="700" letter-spacing="2">LAYER 3 · REWARD PATH (your node, your rules)</text>
+
+  <rect x="60" y="584" width="230" height="120" rx="14" fill="url(#sniper)" stroke="#f7931a" stroke-width="1.5"/>
+  <text x="175" y="616" fill="#fff" font-size="18" font-weight="700" text-anchor="middle">Solo Sniper</text>
+  <text x="80" y="642" fill="#fff3e0" font-size="12">• instant job switch on new block</text>
+  <text x="80" y="662" fill="#fff3e0" font-size="12">• minimise stale-work hashes</text>
+  <text x="80" y="682" fill="#fff3e0" font-size="12">• fee-max template (your node)</text>
+
+  <rect x="420" y="584" width="230" height="120" rx="14" fill="#0f1620" stroke="#f7931a" stroke-width="1.5"/>
+  <text x="535" y="616" fill="#ffb454" font-size="18" font-weight="700" text-anchor="middle">Umbrel</text>
+  <text x="535" y="640" fill="#ffd9a8" font-size="12.5" text-anchor="middle">Public Pool (solo stratum)</text>
+  <text x="535" y="668" fill="#8b949e" font-size="11.5" text-anchor="middle">local · low latency</text>
+  <text x="535" y="688" fill="#8b949e" font-size="11.5" text-anchor="middle">0% fee · full reward</text>
+
+  <rect x="780" y="584" width="240" height="120" rx="14" fill="#0f1620" stroke="#f7931a" stroke-width="1.5"/>
+  <text x="900" y="616" fill="#ffb454" font-size="18" font-weight="700" text-anchor="middle">Bitcoin Core</text>
+  <text x="900" y="640" fill="#ffd9a8" font-size="12.5" text-anchor="middle">your full node</text>
+  <text x="900" y="668" fill="#8b949e" font-size="11.5" text-anchor="middle">builds block template</text>
+  <text x="900" y="688" fill="#8b949e" font-size="11.5" text-anchor="middle">validates · 3.125 BTC if hit</text>
+
+  <path d="M290,644 H420" fill="none" stroke="#f7931a" stroke-width="2.5" marker-end="url(#arrowO)"/>
+  <text x="355" y="636" fill="#f7931a" font-size="11" text-anchor="middle">Stratum</text>
+  <path d="M650,644 H780" fill="none" stroke="#f7931a" stroke-width="2.5" marker-end="url(#arrowO)"/>
+  <text x="715" y="636" fill="#f7931a" font-size="11" text-anchor="middle">RPC/ZMQ</text>
+
+  <!-- link chip to sniper -->
+  <path d="M160,280 V584" fill="none" stroke="#30363d" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <text x="120" y="440" fill="#6e7681" font-size="11" transform="rotate(-90 120 440)">valid shares</text>
+
+  <text x="40" y="742" fill="#6e7681" font-size="12">Honest by design: same PoW lottery as everyone — but zero waste, zero fees, full reward, and a chip that self-optimises 24/7.</text>
+</svg>
