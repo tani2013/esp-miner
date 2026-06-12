@@ -27,3 +27,8 @@ jobs:
         run: |
           gcc -Wall -Wextra -O2 -I main test/native/block_tracker_test_native.c main/block_tracker.c -o bt_native
           ./bt_native
+
+      - name: Build and run mining intelligence tests
+        run: |
+          gcc -Wall -Wextra -O2 -I main test/native/mining_intel_test_native.c main/mining_intel.c -o mi_native -lm
+          ./mi_native

@@ -313,6 +313,18 @@ components:
         blockAgeSeconds:
           type: number
           description: Seconds since the last new block arrived, or -1 if none yet (Solo Sniper)
+        expectedTimeToBlockSeconds:
+          type: number
+          description: Average seconds to find a block at current hashrate vs network difficulty (Mining Intelligence)
+        blockProbability24h:
+          type: number
+          description: Probability (0..1) of finding a block within 24h (Mining Intelligence)
+        blockProbability1y:
+          type: number
+          description: Probability (0..1) of finding a block within 1 year (Mining Intelligence)
+        expectedBtcPerDay:
+          type: number
+          description: Expected reward rate in BTC/day at current settings (Mining Intelligence)
         hashRate:
           type: number
           description: Current hashrate in Gh/s

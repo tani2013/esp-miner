@@ -7,6 +7,7 @@ idf_component_register(
         "nvs_config.c"
         "asg.c"
         "block_tracker.c"
+        "mining_intel.c"
         "display.c"
         "screen.c"
         "input.c"

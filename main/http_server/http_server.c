@@ -17,6 +17,7 @@
 #include "esp_spiffs.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "mining_intel.h"
 #include "esp_wifi.h"
 #include "esp_vfs.h"
 
@@ -1036,6 +1037,14 @@ static esp_err_t GET_system_info(httpd_req_t * req)
         cJSON_AddNumberToObject(root, "blockHeight", GLOBAL_STATE->block_height);
         cJSON_AddStringToObject(root, "scriptsig", GLOBAL_STATE->scriptsig);
         cJSON_AddNumberToObject(root, "networkDifficulty", GLOBAL_STATE->network_nonce_diff);
+
+        // Mining Intelligence: honest solo-mining expectation maths.
+        double mi_hr = GLOBAL_STATE->SYSTEM_MODULE.current_hashrate;
+        double mi_diff = (double) GLOBAL_STATE->network_nonce_diff;
+        cJSON_AddNumberToObject(root, "expectedTimeToBlockSeconds", mining_intel_seconds_to_block(mi_hr, mi_diff));
+        cJSON_AddNumberToObject(root, "blockProbability24h", mining_intel_block_probability(mi_hr, mi_diff, 86400.0));
+        cJSON_AddNumberToObject(root, "blockProbability1y", mining_intel_block_probability(mi_hr, mi_diff, 86400.0 * 365.0));
+        cJSON_AddNumberToObject(root, "expectedBtcPerDay", mining_intel_expected_btc_per_day(mi_hr, mi_diff, GLOBAL_STATE->block_height));
 
         cJSON *block_signals_array = cJSON_CreateArray();
         for (int i = 0; i < GLOBAL_STATE->block_signals_count; i++) {
