@@ -5,6 +5,9 @@ idf_component_register(
         "main.c"
         "log_buffer.c"
         "nvs_config.c"
+        "asg.c"
+        "block_tracker.c"
+        "mining_intel.c"
         "display.c"
         "screen.c"
         "input.c"
@@ -83,3 +86,11 @@ idf_component_register(
 
     EMBED_FILES "http_server/recovery_page.html"
 )
+
+# Generate the `www` SPIFFS image (web UI filesystem) so the build produces
+# build/www.bin. This was inadvertently dropped when main/CMakeLists.txt was
+# rewritten; without it idf.py build emits esp-miner.bin but no www.bin. The
+# image is built from the prebuilt Angular output, so `npm run build` in
+# main/http_server/axe-os must run first (CI and the documented local flow do).
+set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/axe-os")
+spiffs_create_partition_image(www ${WEB_SRC_DIR}/dist/axe-os FLASH_IN_PROJECT)

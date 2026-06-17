@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <cstddef>
+#include <cstdio>
+#include "esp_system.h"
+#include "esp_heap_caps.h"
 
 // ============================================
 // CONSTANTS
@@ -214,12 +217,12 @@ public:
     // Debug: Print frame hex
     // ============================================
     void debugPrintFrame(const char* label) const {
-        Serial.printf("[V2] %s - Frame size: %d bytes\n", label, frame_pos);
-        Serial.print("     Hex: ");
+        printf("[V2] %s - Frame size: %lu bytes\n", label, (unsigned long)frame_pos);
+        printf("     Hex: ");
         for (size_t i = 0; i < frame_pos && i < 64; i++) {  // Print first 64 bytes
-            Serial.printf("%02X ", frame_buffer[i]);
+            printf("%02X ", frame_buffer[i]);
         }
-        Serial.println();
+        printf("\n");
     }
 
     // ============================================
@@ -311,12 +314,12 @@ public:
         uint32_t min_free = esp_get_minimum_free_heap_size();
         uint32_t largest_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
         
-        Serial.printf("[HEAP] %s - Free: %d bytes | Min: %d bytes | Largest block: %d bytes\n",
-            label, free_heap, min_free, largest_block);
-        
+        printf("[HEAP] %s - Free: %lu bytes | Min: %lu bytes | Largest block: %lu bytes\n",
+            label, (unsigned long)free_heap, (unsigned long)min_free, (unsigned long)largest_block);
+
         // WARNING: If free_heap < 30000, we're in danger zone
         if (free_heap < 30000) {
-            Serial.println("[HEAP] WARNING: Low memory! Risk of panic!");
+            printf("[HEAP] WARNING: Low memory! Risk of panic!\n");
         }
     }
 };

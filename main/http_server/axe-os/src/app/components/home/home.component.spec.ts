@@ -11,6 +11,7 @@ import { DropdownModule } from 'primeng/dropdown';
 import { ChartModule } from 'primeng/chart';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
+import { InputSwitchModule } from 'primeng/inputswitch';
 
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { DiffSuffixPipe } from 'src/app/pipes/diff-suffix.pipe';
@@ -58,7 +59,8 @@ describe('HomeComponent', () => {
         DropdownModule,
         ChartModule,
         ProgressBarModule,
-        TooltipModule
+        TooltipModule,
+        InputSwitchModule
       ],
       providers: [
         provideRouter([]),

@@ -17,6 +17,7 @@
 #include "esp_spiffs.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "mining_intel.h"
 #include "esp_wifi.h"
 #include "esp_vfs.h"
 
@@ -942,7 +943,15 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.core_voltage);
     cJSON_AddFloatToObject(root, "frequency", frequency);
-    cJSON_AddFloatToObject(root, "actualFrequency", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.actual_frequency);    
+    cJSON_AddFloatToObject(root, "actualFrequency", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.actual_frequency);
+    cJSON_AddFloatToObject(root, "asgTargetFrequency", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.asg_target_frequency);
+    cJSON_AddFloatToObject(root, "asgTargetVoltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.asg_target_voltage);
+    cJSON_AddNumberToObject(root, "asgEnabled", nvs_config_get_bool(NVS_CONFIG_ASG_ENABLED));
+    cJSON_AddNumberToObject(root, "asgErrorTarget", nvs_config_get_u16(NVS_CONFIG_ASG_ERROR_TARGET));
+    cJSON_AddNumberToObject(root, "asgVoltageControl", nvs_config_get_bool(NVS_CONFIG_ASG_VOLTAGE_CONTROL));
+    cJSON_AddNumberToObject(root, "blocksSeen", GLOBAL_STATE->SYSTEM_MODULE.blocks_seen);
+    int64_t asg_last_block_us = GLOBAL_STATE->SYSTEM_MODULE.last_block_change_us;
+    cJSON_AddNumberToObject(root, "blockAgeSeconds", asg_last_block_us > 0 ? (esp_timer_get_time() - asg_last_block_us) / 1000000.0 : -1);
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
     cJSON_AddStringToObject(root, "hostname", hostname);
@@ -1028,6 +1037,14 @@ static esp_err_t GET_system_info(httpd_req_t * req)
         cJSON_AddNumberToObject(root, "blockHeight", GLOBAL_STATE->block_height);
         cJSON_AddStringToObject(root, "scriptsig", GLOBAL_STATE->scriptsig);
         cJSON_AddNumberToObject(root, "networkDifficulty", GLOBAL_STATE->network_nonce_diff);
+
+        // Mining Intelligence: honest solo-mining expectation maths.
+        double mi_hr = GLOBAL_STATE->SYSTEM_MODULE.current_hashrate;
+        double mi_diff = (double) GLOBAL_STATE->network_nonce_diff;
+        cJSON_AddNumberToObject(root, "expectedTimeToBlockSeconds", mining_intel_seconds_to_block(mi_hr, mi_diff));
+        cJSON_AddNumberToObject(root, "blockProbability24h", mining_intel_block_probability(mi_hr, mi_diff, 86400.0));
+        cJSON_AddNumberToObject(root, "blockProbability1y", mining_intel_block_probability(mi_hr, mi_diff, 86400.0 * 365.0));
+        cJSON_AddNumberToObject(root, "expectedBtcPerDay", mining_intel_expected_btc_per_day(mi_hr, mi_diff, GLOBAL_STATE->block_height));
 
         cJSON *block_signals_array = cJSON_CreateArray();
         for (int i = 0; i < GLOBAL_STATE->block_signals_count; i++) {
